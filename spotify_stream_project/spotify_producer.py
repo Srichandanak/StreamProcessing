@@ -3,15 +3,14 @@ import time
 from kafka import KafkaProducer
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
-
+import os
 # Set up Spotify authentication
 sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
-    client_id="c6441919302447a087efb7d309dbc324",
-    client_secret="a4bed5de29bd40adac0ca42cdbcbd067",
-    redirect_uri="http://127.0.0.1:8888/callback",
+    client_id=os.environ["SPOTIFY_CLIENT_ID"],
+    client_secret=os.environ["SPOTIFY_CLIENT_SECRET_ID"],
+    redirect_uri=os.environ["SPOTIFY_REDIRECT_URI"],
     scope="user-read-playback-state user-read-currently-playing"
 ))
-
 # Set up Kafka Producer
 producer = KafkaProducer(
     bootstrap_servers='localhost:9092',
