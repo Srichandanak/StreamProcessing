@@ -1,32 +1,50 @@
-# spotify_consumer.py
 from kafka import KafkaConsumer
 import json
-from collections import Counter
-import threading
 
-# In-memory stats
-song_counter = Counter()
-artist_counter = Counter()
-total_tracks = 0
-total_duration = 0  # in ms
+# Kafka consumer
+consumer = KafkaConsumer(
+    'spotify-raw',
+    bootstrap_servers='localhost:9092',
+    value_deserializer=lambda m: json.loads(m.decode('utf-8'))
+)
 
-def consume():
-    global total_tracks, total_duration
-    consumer = KafkaConsumer(
-        'spotify-raw',
-        bootstrap_servers='localhost:9092',
-        auto_offset_reset='latest',
-        group_id='spotify-group',
-        value_deserializer=lambda m: json.loads(m.decode('utf-8'))
-    )
+# PostgreSQL connection
 
-    for message in consumer:
+import psycopg2
+import os
+
+DATABASE_URL = "postgresql://postgres:Sri%2F123%40@localhost:5432/spotify_stream"
+
+conn = psycopg2.connect(DATABASE_URL)
+
+# conn = psycopg2.connect(
+#     dbname="project",
+#     user="postgres",
+#     password="pass",
+#     host="localhost",
+#     port="5432"
+# )
+cursor = conn.cursor()
+
+print("Consuming messages and inserting into DB...")
+
+for message in consumer:
+    try:
         data = message.value
-        if data['is_playing']:
-            song_counter[data['track']] += 1
-            artist_counter[data['artist']] += 1
-            total_tracks += 1
-            total_duration += data['duration_ms']
-
-# Start consuming in background when imported
-threading.Thread(target=consume, daemon=True).start()
+        cursor.execute("""
+            INSERT INTO streamed_tracks (timestamp, track, artist, album, duration_ms, progress_ms, is_playing)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            data.get('timestamp'),
+            data.get('track'),
+            data.get('artist'),
+            data.get('album'),
+            data.get('duration_ms'),
+            data.get('progress_ms'),
+            data.get('is_playing')
+        ))
+        conn.commit()
+        print(f"Inserted into DB: {data['track']} by {data['artist']}")
+    except Exception as e:
+        print("Error:", e)
+        conn.rollback()
